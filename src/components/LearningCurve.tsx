@@ -1,5 +1,5 @@
 import type { HistoryPoint } from '../game/reducer'
-import { TARGET } from '../ml/onlineModel'
+import { TARGET } from '../api/types'
 
 const W = 320, H = 140, L = 28, R = 8, T = 10, B = 22
 

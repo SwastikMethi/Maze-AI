@@ -1,4 +1,4 @@
-import type { RunResult } from '../game/types'
+import type { RunResult } from '../api/types'
 
 export function ResultCard({ run }: { run: RunResult }) {
   const rows: [string, string][] = [

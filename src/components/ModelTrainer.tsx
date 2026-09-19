@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { HistoryPoint } from '../game/reducer'
-import { FEATURE_KEYS } from '../game/getFeatures'
-import { FEATURE_LABELS, LR, TARGET, sigmoid, type LearningUpdate } from '../ml/onlineModel'
+import { FEATURE_KEYS, FEATURE_LABELS, LR, TARGET, sigmoid, type LearningUpdate } from '../api/types'
 import { LearningCurve } from './LearningCurve'
 
 export const TRAIN_MS = 6200

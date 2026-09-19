@@ -23,6 +23,7 @@ h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); letter-spacing: -0.02em; margin: 0 0
 .tagline { color: var(--slate); margin: 0 0 20px; font-size: 1.1rem; }
 .muted { color: var(--slate); margin: 6px 0; }
 .notice { color: var(--coral); font-size: 0.9rem; }
+.centered { text-align: center; }
 
 .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
 .card__title { margin: 0 0 12px; font-size: 1.05rem; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }

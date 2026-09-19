@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { FEATURE_KEYS } from '../game/getFeatures'
-import { FEATURE_LABELS, LR, TARGET, W0, sigmoid, type LearningUpdate } from '../ml/onlineModel'
+import { FEATURE_KEYS, FEATURE_LABELS, LR, TARGET, W0, sigmoid, type LearningUpdate } from '../api/types'
 
 type Props = { open: boolean; onClose: () => void; update: LearningUpdate | null }
 
@@ -75,7 +74,7 @@ export function HowItWorks({ open, onClose, update }: Props) {
 
         <h3>How the next maze is chosen</h3>
         <p>
-          After learning, the game builds 24 candidate mazes of different sizes and styles, runs each one through the updated model to predict
+          After learning, the game builds 32 candidate mazes of different sizes and styles, runs each one through the updated model to predict
           your efficiency, and picks the candidate closest to <b>{TARGET}</b>: hard enough to be interesting, easy enough to finish.
           There is no "you won, so harder" rule anywhere. If you struggled, small mazes now predict near {TARGET}. If you cruised, big ones do.
           Faded candidates are the ones predicted far from the target.

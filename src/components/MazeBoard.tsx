@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { E, S, W, N, type Maze, type Point } from '../game/types'
+import { E, S, W, N, type Maze, type Point } from '../api/types'
 
 type Props = {
   maze: Pick<Maze, 'rows' | 'cols' | 'open' | 'start' | 'goal'>

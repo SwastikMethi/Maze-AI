@@ -1,31 +1,18 @@
-import { analyzeRun } from './analyzeRun'
-import { FIRST_MAZE, generateMaze } from './generateMaze'
-import { normalize } from './getFeatures'
-import { hashSeed } from './rng'
-import { solveMaze } from './solveMaze'
-import { DR, DC, idx, samePoint, type Dir, type Maze, type Point, type RunResult } from './types'
-import { buildUpdate, initialWeights, learn, predict, type LearningUpdate, type Weights } from '../ml/onlineModel'
-import { generateCandidates, selectCandidate, type CandidateScore } from '../ml/selectCandidate'
+import { DC, DR, idx, samePoint, type CompleteResponse, type Dir, type Maze, type Point, type RunResult, type Weights } from '../api/types'
 import type { Saved } from '../storage/localProgress'
 
-export type GamePhase = 'welcome' | 'playing' | 'reviewing-path' | 'updating-model' | 'selecting-maze' | 'next-ready'
+export type GamePhase = 'welcome' | 'playing' | 'scoring' | 'reviewing-path' | 'updating-model' | 'selecting-maze' | 'next-ready'
 
-/** Everything the post-level animation needs, computed once at goal-reached. */
-export type LevelOutcome = {
-  run: RunResult
-  optimalPath: Point[]
-  update: LearningUpdate
-  scores: CandidateScore[]
-  selectedIndex: number
-  explanation: string
-  nextMaze: Maze
-}
+/** Everything the post-level animation needs, as returned by the server in one shot. */
+export type LevelOutcome = Omit<CompleteResponse, 'model'>
+export type HistoryPoint = { predicted: number; actual: number }
 
 export type State = {
   phase: GamePhase
   maze: Maze
   path: Point[]
   startedAt: number | null
+  finishedAt: number | null
   model: Weights
   completed: number
   recentRuns: RunResult[]
@@ -35,16 +22,16 @@ export type State = {
   notice: string | null
 }
 
-export type HistoryPoint = { predicted: number; actual: number }
-
 export type Action =
   | { type: 'START' }
   | { type: 'MOVE'; dir: Dir; now: number }
+  | { type: 'SCORED'; result: CompleteResponse }
+  | { type: 'SCORE_FAILED'; message: string }
   | { type: 'NEXT_STAGE' }
   | { type: 'SKIP' }
   | { type: 'REPLAY' }
   | { type: 'TRY_NEXT' }
-  | { type: 'RESET' }
+  | { type: 'RESET'; maze: Maze; model: Weights }
 
 const NEXT: Partial<Record<GamePhase, GamePhase>> = {
   'reviewing-path': 'updating-model',
@@ -52,41 +39,19 @@ const NEXT: Partial<Record<GamePhase, GamePhase>> = {
   'selecting-maze': 'next-ready',
 }
 
-export function createInitialState(saved: Saved | null, notice: string | null = null): State {
-  const maze = saved?.lastMaze ?? generateMaze(FIRST_MAZE)
+export function createInitialState(maze: Maze, model: Weights, saved: Saved | null, notice: string | null = null): State {
   return {
     phase: 'welcome',
-    maze,
-    path: [maze.start],
+    maze: saved?.lastMaze ?? maze,
+    path: [(saved?.lastMaze ?? maze).start],
     startedAt: null,
-    model: saved?.model ?? initialWeights(),
+    finishedAt: null,
+    model: saved?.model ?? model,
     completed: saved?.completed ?? 0,
     recentRuns: saved?.recentRuns ?? [],
     history: saved?.history ?? [],
     outcome: null,
     notice,
-  }
-}
-
-/** The only place the model learns. Runs synchronously; the UI animates from the result. */
-function completeLevel(state: State, path: Point[], now: number): State {
-  const { maze, model, completed } = state
-  const optimalPath = solveMaze(maze)!
-  const run = analyzeRun(maze, path, optimalPath, now - (state.startedAt ?? now))
-  const x = normalize(maze.features)
-  const predicted = predict(model, x)
-  const after = learn(model, x, run.efficiency)
-  const update = buildUpdate(model, after, x, run.efficiency, completed + 1)
-  const { scores, selectedIndex, explanation } = selectCandidate(after, generateCandidates(hashSeed(maze.seed, completed + 1)), maze)
-  return {
-    ...state,
-    phase: 'reviewing-path',
-    path,
-    model: after,
-    completed: completed + 1,
-    recentRuns: [...state.recentRuns, run].slice(-10),
-    history: [...state.history, { predicted, actual: run.efficiency }].slice(-20),
-    outcome: { run, optimalPath, update, scores, selectedIndex, explanation, nextMaze: scores[selectedIndex].maze },
   }
 }
 
@@ -100,9 +65,29 @@ export function reducer(state: State, action: Action): State {
       if (!(state.maze.open[idx(state.maze, cur)] & action.dir)) return state
       const next = { r: cur.r + DR[action.dir], c: cur.c + DC[action.dir] }
       const path = [...state.path, next]
-      if (samePoint(next, state.maze.goal)) return completeLevel({ ...state, startedAt: state.startedAt ?? action.now }, path, action.now)
-      return { ...state, path, startedAt: state.startedAt ?? action.now }
+      const startedAt = state.startedAt ?? action.now
+      // Goal reached: freeze the run and hand it to the server (App posts it while phase === 'scoring').
+      if (samePoint(next, state.maze.goal)) return { ...state, phase: 'scoring', path, startedAt, finishedAt: action.now }
+      return { ...state, path, startedAt }
     }
+    case 'SCORED': {
+      // The only place the model changes. Ignored unless we are waiting on a score, so a late/duplicate reply can't retrain.
+      if (state.phase !== 'scoring') return state
+      const { model, ...outcome } = action.result
+      const { run, update } = outcome
+      return {
+        ...state,
+        phase: 'reviewing-path',
+        model,
+        completed: state.completed + 1,
+        recentRuns: [...state.recentRuns, run].slice(-10),
+        history: [...state.history, { predicted: update.predictionBefore, actual: run.efficiency }].slice(-20),
+        outcome,
+      }
+    }
+    case 'SCORE_FAILED':
+      // Keep the previous model and let the player retry the same maze; never show a fake learning result.
+      return state.phase === 'scoring' ? { ...state, phase: 'playing', path: [state.maze.start], startedAt: null, finishedAt: null, notice: action.message } : state
     case 'NEXT_STAGE':
       return NEXT[state.phase] ? { ...state, phase: NEXT[state.phase]! } : state
     case 'SKIP':
@@ -111,8 +96,8 @@ export function reducer(state: State, action: Action): State {
       return state.outcome ? { ...state, phase: 'reviewing-path' } : state
     case 'TRY_NEXT':
       if (!state.outcome) return state
-      return { ...state, phase: 'playing', maze: state.outcome.nextMaze, path: [state.outcome.nextMaze.start], startedAt: null, outcome: null }
+      return { ...state, phase: 'playing', maze: state.outcome.nextMaze, path: [state.outcome.nextMaze.start], startedAt: null, finishedAt: null, outcome: null, notice: null }
     case 'RESET':
-      return createInitialState(null)
+      return createInitialState(action.maze, action.model, null)
   }
 }

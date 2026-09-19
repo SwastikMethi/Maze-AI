@@ -2,3 +2,7 @@ node_modules
 dist
 .DS_Store
 .gstack/
+
+server/.venv
+__pycache__
+.pytest_cache

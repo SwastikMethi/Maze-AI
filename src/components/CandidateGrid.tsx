@@ -1,5 +1,5 @@
 import { MazeBoard } from './MazeBoard'
-import type { CandidateScore } from '../ml/selectCandidate'
+import type { CandidateScore } from '../api/types'
 
 type Props = { scores: CandidateScore[]; selectedIndex: number; explanation: string; animate: boolean; onTry: () => void }
 

@@ -1,24 +1,23 @@
+import type { Maze, RunResult, Weights } from '../api/types'
 import type { HistoryPoint } from '../game/reducer'
-import type { Maze, RunResult } from '../game/types'
-import type { Weights } from '../ml/onlineModel'
 
-const KEY = 'evomaze.v1'
+const KEY = 'evomaze.v2'
 
-export type Saved = { version: 1; model: Weights; completed: number; recentRuns: RunResult[]; lastMaze: Maze; history?: HistoryPoint[] }
+export type Saved = { version: 2; model: Weights; completed: number; recentRuns: RunResult[]; lastMaze: Maze; history?: HistoryPoint[] }
 
 function isSaved(v: unknown): v is Saved {
   const s = v as Saved
   return (
-    !!s && typeof s === 'object' && s.version === 1 &&
+    !!s && typeof s === 'object' && s.version === 2 &&
     Array.isArray(s.model?.w) && s.model.w.length === 5 && typeof s.model.b === 'number' &&
     typeof s.completed === 'number' && Array.isArray(s.recentRuns) &&
-    !!s.lastMaze && Array.isArray(s.lastMaze.open) && typeof s.lastMaze.rows === 'number'
+    !!s.lastMaze && Array.isArray(s.lastMaze.open) && typeof s.lastMaze.rows === 'number' && typeof s.lastMaze.loops === 'number'
   )
 }
 
 export function saveProgress(s: Omit<Saved, 'version'>): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ version: 1, ...s }))
+    localStorage.setItem(KEY, JSON.stringify({ version: 2, ...s }))
   } catch { /* storage unavailable: play without persistence */ }
 }
 
