@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { initialWeights, learn, predict, sensitivity, buildUpdate, W0, TARGET } from './onlineModel'
+import { initialWeights, learn, predict, buildUpdate, TARGET } from './onlineModel'
 import { normalize } from '../game/getFeatures'
 import { FIRST_MAZE, generateMaze } from '../game/generateMaze'
 
@@ -24,17 +24,15 @@ describe('onlineModel', () => {
     expect(predict(m, x)).toBe(predict(m, x))
   })
 
-  it('sensitivity is 50 at the prior and rises when a weight drops', () => {
-    expect(sensitivity(W0)).toBeCloseTo(50)
-    expect(sensitivity(W0 - 0.2)).toBeGreaterThan(50)
-  })
-
-  it('buildUpdate reports only features that visibly changed, with an early-signal sentence', () => {
+  it('buildUpdate exposes raw inputs, weights and bias with a plain-English signal', () => {
     const before = initialWeights()
-    const after = learn(before, x, 0.3)
-    const u = buildUpdate(before, after, x, 0.3, 1)
-    expect(u.confidence).toBe('low')
-    expect(u.changedFeatures.length).toBeGreaterThan(0)
-    expect(u.signal).toMatch(/^Early signal: .* slowed you down\.$/)
+    const poor = buildUpdate(before, learn(before, x, 0.3), x, 0.3, 1)
+    expect(poor.x).toHaveLength(5)
+    expect(poor.weightsBefore).toEqual(before.w)
+    expect(poor.biasAfter).not.toBe(poor.biasBefore)
+    expect(poor.confidence).toBe('low')
+    expect(poor.signal).toMatch(/^Early signal: You fell short of the prediction/)
+    const strong = buildUpdate(before, learn(before, x, 1), x, 1, 9)
+    expect(strong.signal).toMatch(/^You beat the prediction/)
   })
 })

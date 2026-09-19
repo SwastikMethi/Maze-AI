@@ -4,7 +4,7 @@ import { normalize } from './getFeatures'
 import { hashSeed } from './rng'
 import { solveMaze } from './solveMaze'
 import { DR, DC, idx, samePoint, type Dir, type Maze, type Point, type RunResult } from './types'
-import { buildUpdate, initialWeights, learn, type LearningUpdate, type Weights } from '../ml/onlineModel'
+import { buildUpdate, initialWeights, learn, predict, type LearningUpdate, type Weights } from '../ml/onlineModel'
 import { generateCandidates, selectCandidate, type CandidateScore } from '../ml/selectCandidate'
 import type { Saved } from '../storage/localProgress'
 
@@ -29,9 +29,13 @@ export type State = {
   model: Weights
   completed: number
   recentRuns: RunResult[]
+  /** One point per completed maze: what the model predicted vs what happened. */
+  history: HistoryPoint[]
   outcome: LevelOutcome | null
   notice: string | null
 }
+
+export type HistoryPoint = { predicted: number; actual: number }
 
 export type Action =
   | { type: 'START' }
@@ -58,6 +62,7 @@ export function createInitialState(saved: Saved | null, notice: string | null = 
     model: saved?.model ?? initialWeights(),
     completed: saved?.completed ?? 0,
     recentRuns: saved?.recentRuns ?? [],
+    history: saved?.history ?? [],
     outcome: null,
     notice,
   }
@@ -69,6 +74,7 @@ function completeLevel(state: State, path: Point[], now: number): State {
   const optimalPath = solveMaze(maze)!
   const run = analyzeRun(maze, path, optimalPath, now - (state.startedAt ?? now))
   const x = normalize(maze.features)
+  const predicted = predict(model, x)
   const after = learn(model, x, run.efficiency)
   const update = buildUpdate(model, after, x, run.efficiency, completed + 1)
   const { scores, selectedIndex, explanation } = selectCandidate(after, generateCandidates(hashSeed(maze.seed, completed + 1)), maze)
@@ -79,6 +85,7 @@ function completeLevel(state: State, path: Point[], now: number): State {
     model: after,
     completed: completed + 1,
     recentRuns: [...state.recentRuns, run].slice(-10),
+    history: [...state.history, { predicted, actual: run.efficiency }].slice(-20),
     outcome: { run, optimalPath, update, scores, selectedIndex, explanation, nextMaze: scores[selectedIndex].maze },
   }
 }

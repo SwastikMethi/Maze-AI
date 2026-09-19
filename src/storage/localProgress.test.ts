@@ -14,9 +14,16 @@ describe('localProgress', () => {
   beforeEach(() => store.clear())
 
   it('progress survives a save/load round trip', () => {
-    const data = { model: initialWeights(), completed: 3, recentRuns: [], lastMaze: generateMaze(FIRST_MAZE) }
+    const data = { model: initialWeights(), completed: 3, recentRuns: [], lastMaze: generateMaze(FIRST_MAZE), history: [{ predicted: 0.7, actual: 1 }] }
     saveProgress(data)
     expect(loadProgress()).toEqual({ saved: { version: 1, ...data }, invalid: false })
+  })
+
+  it('loads older saves that have no history', () => {
+    const { history: _h, ...legacy } = { model: initialWeights(), completed: 1, recentRuns: [], lastMaze: generateMaze(FIRST_MAZE), history: [] }
+    store.set('evomaze.v1', JSON.stringify({ version: 1, ...legacy }))
+    expect(loadProgress().saved?.history).toBeUndefined()
+    expect(loadProgress().invalid).toBe(false)
   })
 
   it('returns nothing when empty', () => {

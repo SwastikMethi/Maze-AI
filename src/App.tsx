@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { MazeBoard } from './components/MazeBoard'
 import { ResultCard } from './components/ResultCard'
-import { ModelUpdate } from './components/ModelUpdate'
+import { ModelTrainer, TRAIN_MS } from './components/ModelTrainer'
 import { CandidateGrid } from './components/CandidateGrid'
 import { createInitialState, reducer, type GamePhase } from './game/reducer'
 import { generateMaze } from './game/generateMaze'
@@ -12,8 +12,8 @@ import { clearProgress, loadProgress, saveProgress } from './storage/localProgre
 const KEYS: Record<string, Dir> = {
   ArrowUp: N, w: N, W: N, ArrowRight: E, d: E, D: E, ArrowDown: S, s: S, S: S, ArrowLeft: W, a: W, A: W,
 }
-/** PRD §7 budget: replay 3.4 s + model 1.3 s + selection 1.3 s ≈ 6 s before "Try this maze". */
-const STAGE_MS: Partial<Record<GamePhase, number>> = { 'reviewing-path': 3400, 'updating-model': 1300, 'selecting-maze': 1300 }
+/** Replay 2.6 s + model training 6.2 s + selection 1.3 s ≈ 10 s before "Try this maze". The training stage is the point of the app. */
+const STAGE_MS: Partial<Record<GamePhase, number>> = { 'reviewing-path': 2600, 'updating-model': TRAIN_MS, 'selecting-maze': 1300 }
 const STAGES: [GamePhase, string][] = [['reviewing-path', 'Your route'], ['updating-model', 'Model'], ['selecting-maze', 'Next maze']]
 const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -61,8 +61,8 @@ export default function App() {
 
   // Persistence
   useEffect(() => {
-    saveProgress({ model: state.model, completed: state.completed, recentRuns: state.recentRuns, lastMaze: maze })
-  }, [state.model, state.completed, state.recentRuns, maze])
+    saveProgress({ model: state.model, completed: state.completed, recentRuns: state.recentRuns, lastMaze: maze, history: state.history })
+  }, [state.model, state.completed, state.recentRuns, state.history, maze])
 
   const onPointerDown = (e: React.PointerEvent) => { swipe.current = { x: e.clientX, y: e.clientY } }
   const onPointerUp = (e: React.PointerEvent) => {
@@ -77,7 +77,7 @@ export default function App() {
   }
 
   const elapsed = state.startedAt ? Math.max(0, now - state.startedAt) : 0
-  const animating = phase === 'reviewing-path' || phase === 'updating-model' || phase === 'selecting-maze'
+  const animating = STAGE_MS[phase] !== undefined
   const stageIndex = STAGES.findIndex(([p]) => p === phase)
 
   return (
@@ -136,7 +136,9 @@ export default function App() {
               <ResultCard run={outcome.run} />
             </div>
           )}
-          {(phase === 'updating-model' || phase === 'next-ready') && <ModelUpdate update={outcome.update} animate={phase === 'updating-model'} />}
+          {(phase === 'updating-model' || phase === 'next-ready') && (
+            <ModelTrainer key={phase} update={outcome.update} history={state.history} animate={phase === 'updating-model'} />
+          )}
           {(phase === 'selecting-maze' || phase === 'next-ready') && (
             <CandidateGrid
               scores={outcome.scores}

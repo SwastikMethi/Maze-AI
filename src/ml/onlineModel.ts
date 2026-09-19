@@ -3,12 +3,14 @@ import { FIRST_MAZE, generateMaze } from '../game/generateMaze'
 
 export type Weights = { w: number[]; b: number }
 export type Confidence = 'low' | 'medium' | 'high'
+/** Everything the trainer visual needs. Weights are in FEATURE_KEYS order. */
 export type LearningUpdate = {
-  predictionBefore: number
+  x: number[]
+  weightsBefore: number[]
+  weightsAfter: number[]
+  biasBefore: number
+  biasAfter: number
   actualEfficiency: number
-  weightsBefore: Record<FeatureKey, number>
-  weightsAfter: Record<FeatureKey, number>
-  changedFeatures: FeatureKey[]
   confidence: Confidence
   signal: string
 }
@@ -17,7 +19,6 @@ export const TARGET = 0.7
 export const LR = 1.5 // ponytail: single learning-rate knob; lower if the model overshoots on real players
 /** Shared prior weight: "more of any feature is harder". Neutral across features, not zero. */
 export const W0 = -1.0
-const GAIN = 4 // display-only: spreads small weight changes into visible percentage moves
 
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
   size: 'bigger grids',
@@ -27,7 +28,8 @@ export const FEATURE_LABELS: Record<FeatureKey, string> = {
   deadEndCount: 'dead ends',
 }
 
-const sigmoid = (z: number) => 1 / (1 + Math.exp(-z))
+export const sigmoid = (z: number) => 1 / (1 + Math.exp(-z))
+export const score = (m: Weights, x: number[]) => m.b + m.w.reduce((s, w, i) => s + w * x[i], 0)
 
 /** Prior: every weight W0, bias chosen so the fixed first maze predicts exactly TARGET. */
 export function initialWeights(): Weights {
@@ -37,7 +39,7 @@ export function initialWeights(): Weights {
 }
 
 export function predict(m: Weights, x: number[]): number {
-  return sigmoid(m.b + m.w.reduce((s, w, i) => s + w * x[i], 0))
+  return sigmoid(score(m, x))
 }
 
 /** One SGD step toward the observed efficiency. Returns a new object. */
@@ -46,32 +48,31 @@ export function learn(m: Weights, x: number[], actual: number): Weights {
   return { w: m.w.map((w, i) => w + LR * err * x[i]), b: m.b + LR * err }
 }
 
-/** 0–100. 50 at the prior; higher means this feature hurts the player more. */
-export function sensitivity(w: number): number {
-  return 100 * sigmoid(GAIN * (W0 - w))
-}
-
 export function confidenceFor(completed: number): Confidence {
   return completed < 3 ? 'low' : completed < 8 ? 'medium' : 'high'
 }
 
 export function buildUpdate(before: Weights, after: Weights, x: number[], actual: number, completed: number): LearningUpdate {
-  const record = (m: Weights) => Object.fromEntries(FEATURE_KEYS.map((k, i) => [k, m.w[i]])) as Record<FeatureKey, number>
-  const deltas = FEATURE_KEYS.map((k, i) => ({ k, d: sensitivity(after.w[i]) - sensitivity(before.w[i]) }))
-  const changedFeatures = deltas.filter(({ d }) => Math.abs(d) >= 0.5).map(({ k }) => k)
+  const error = actual - predict(before, x)
   const confidence = confidenceFor(completed)
-  const top = deltas.reduce((a, b) => (Math.abs(b.d) > Math.abs(a.d) ? b : a))
+  const prefix = confidence === 'low' ? 'Early signal: ' : ''
+  // Δw_i ∝ x_i, so the feature with the largest input moves most (bias excluded: its input is always 1).
+  const top = FEATURE_KEYS[x.indexOf(Math.max(...x))]
   const signal =
-    changedFeatures.length === 0
-      ? 'No measurable change yet.'
-      : `${confidence === 'low' ? 'Early signal' : 'Signal'}: ${FEATURE_LABELS[top.k]} ${top.d > 0 ? 'slowed you down' : "didn't trouble you"}.`
+    Math.abs(error) < 0.02
+      ? `${prefix}Prediction was almost exact, so the weights barely moved.`
+      : `${prefix}You ${error > 0 ? 'beat' : 'fell short of'} the prediction, so every feature now looks a little ${error > 0 ? 'less' : 'more'} costly. ` +
+        `${cap(FEATURE_LABELS[top])} moved most because this maze had the most of it.`
   return {
-    predictionBefore: predict(before, x),
+    x,
+    weightsBefore: before.w,
+    weightsAfter: after.w,
+    biasBefore: before.b,
+    biasAfter: after.b,
     actualEfficiency: actual,
-    weightsBefore: record(before),
-    weightsAfter: record(after),
-    changedFeatures,
     confidence,
     signal,
   }
 }
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

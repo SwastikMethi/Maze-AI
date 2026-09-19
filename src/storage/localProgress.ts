@@ -1,9 +1,10 @@
+import type { HistoryPoint } from '../game/reducer'
 import type { Maze, RunResult } from '../game/types'
 import type { Weights } from '../ml/onlineModel'
 
 const KEY = 'evomaze.v1'
 
-export type Saved = { version: 1; model: Weights; completed: number; recentRuns: RunResult[]; lastMaze: Maze }
+export type Saved = { version: 1; model: Weights; completed: number; recentRuns: RunResult[]; lastMaze: Maze; history?: HistoryPoint[] }
 
 function isSaved(v: unknown): v is Saved {
   const s = v as Saved

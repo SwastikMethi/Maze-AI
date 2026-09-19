@@ -30,6 +30,7 @@ describe('reducer', () => {
     expect(done.completed).toBe(1)
     expect(done.model).not.toEqual(start.model)
     expect(done.outcome!.run.efficiency).toBe(1)
+    expect(done.history).toEqual([{ predicted: expect.closeTo(0.7, 6), actual: 1 }])
     expect(done.outcome!.scores).toHaveLength(24)
     expect(done.outcome!.nextMaze.id).not.toBe(start.maze.id)
   })
@@ -45,6 +46,7 @@ describe('reducer', () => {
     for (const s of [skipped, replayed, stepped]) {
       expect(s.model).toBe(done.model)
       expect(s.outcome).toBe(done.outcome)
+      expect(s.history).toBe(done.history)
       expect(s.completed).toBe(1)
     }
   })
