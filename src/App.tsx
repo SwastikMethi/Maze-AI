@@ -3,6 +3,7 @@ import { MazeBoard } from './components/MazeBoard'
 import { ResultCard } from './components/ResultCard'
 import { ModelTrainer, TRAIN_MS } from './components/ModelTrainer'
 import { CandidateGrid } from './components/CandidateGrid'
+import { HowItWorks } from './components/HowItWorks'
 import { createInitialState, reducer, type GamePhase } from './game/reducer'
 import { generateMaze } from './game/generateMaze'
 import { solveMaze } from './game/solveMaze'
@@ -29,19 +30,20 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, undefined, init)
   const { phase, maze, path, outcome } = state
   const [now, setNow] = useState(0)
+  const [help, setHelp] = useState(false)
   const swipe = useRef<{ x: number; y: number } | null>(null)
   const move = (dir: Dir) => dispatch({ type: 'MOVE', dir, now: Date.now() })
 
   // Keyboard
   useEffect(() => {
-    if (phase !== 'playing') return
+    if (phase !== 'playing' || help) return
     const onKey = (e: KeyboardEvent) => {
       const dir = KEYS[e.key]
       if (dir) { e.preventDefault(); move(dir) }
     }
     addEventListener('keydown', onKey)
     return () => removeEventListener('keydown', onKey)
-  }, [phase])
+  }, [phase, help])
 
   // Timer display
   useEffect(() => {
@@ -82,6 +84,10 @@ export default function App() {
 
   return (
     <main className={`app app--${phase}`}>
+      <div className="topbar">
+        <button className="btn btn--ghost help-btn" onClick={() => setHelp(true)}>? How the model learns</button>
+      </div>
+      <HowItWorks open={help} onClose={() => setHelp(false)} update={outcome?.update ?? null} />
       {phase === 'welcome' && (
         <section className="welcome">
           <h1>EvoMaze</h1>
